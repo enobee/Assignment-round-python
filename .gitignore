@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / cache files
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Logs
+*.log
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# macOS metadata
+.DS_Store
