@@ -1,39 +1,29 @@
 from enum import Enum
+from datetime import datetime
 
 class OrderType(Enum):
-    """
-    Order Types Definition
-    
-    Represents the two possible order directions in the system.
-    """
-    BUY = "BUY"    # Order to buy an asset
-    SELL = "SELL"  # Order to sell an asset
+    """Represents order type (BUY or SELL)"""
+    BUY = "BUY"
+    SELL = "SELL"
 
 class OrderStatus(Enum):
-    """
-    Order Status Definition
-    
-    Represents the possible states of an order throughout its lifecycle.
-    """
-    PENDING = "PENDING"              # Order created but not yet confirmed on blockchain
-    ACTIVE = "ACTIVE"                # Order is active in the order book
-    PARTIALLY_FILLED = "PARTIALLY_FILLED"  # Order partially filled
-    FILLED = "FILLED"                # Order completely filled
-    CANCELLED = "CANCELLED"          # Order was cancelled
-    FAILED = "FAILED"                # Order failed (e.g., due to blockchain errors)
+    """Represents the current status of an order"""
+    PENDING = "PENDING"
+    ACTIVE = "ACTIVE"
+    PARTIALLY_FILLED = "PARTIALLY_FILLED"
+    FILLED = "FILLED"
+    CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
 
 class Order:
     """
-    Order Class Design
-    
-    Represents a single order in the multichain orderbook system.
-    Each order specifies an exchange between two assets across two blockchains.
+    Represents a single order in the system.
     """
     
     def __init__(self, id, maker, order_type, base_asset, quote_asset, 
                  base_blockchain, quote_blockchain, amount, price, expiration_time=0):
         """
-        Creates a new order for cross-chain trading
+        Creates a new order for cross-chain trading.
         
         Args:
             id (str): Unique identifier for the order
@@ -47,74 +37,71 @@ class Order:
             price (float): Price in quoteAsset per unit of baseAsset
             expiration_time (int, optional): When order expires (0 for no expiration)
         """
-        # Implementation would:
-        # - Validate order parameters (ensure not trading same asset on same blockchain)
-        # - Initialize order properties
-        # - Set initial status to PENDING
-        pass
-    
+        # Validate that we're not trying to trade the same asset on the same blockchain
+        if (base_asset.id == quote_asset.id and 
+            base_blockchain.id == quote_blockchain.id):
+            raise ValueError("Cannot trade the same asset on the same blockchain")
+            
+        self.id = id
+        self.maker = maker
+        self.order_type = order_type
+        self.base_asset = base_asset
+        self.quote_asset = quote_asset
+        self.base_blockchain = base_blockchain
+        self.quote_blockchain = quote_blockchain
+        self.amount = amount
+        self.price = price
+        self.timestamp = datetime.now().timestamp() * 1000  # milliseconds
+        self.status = OrderStatus.PENDING
+        self.filled_amount = 0
+        self.expiration_time = expiration_time
+        
     def get_remaining_amount(self):
         """
-        Get the remaining amount to be filled
-        
-        Used to determine if an order can be matched with another order
-        and how much of it can be filled.
+        Get the remaining amount to be filled.
         
         Returns:
             float: Remaining amount
         """
-        # Implementation would calculate amount - filled_amount
-        pass
-    
+        return self.amount - self.filled_amount
+        
     def get_total_value(self):
         """
-        Get the total value of this order
-        
-        Used to calculate the total potential trade value.
-        For example, if buying 10 tokens at 2 USD each, the total value is 20 USD.
+        Get the total value of this order.
         
         Returns:
             float: Total value
         """
-        # Implementation would calculate amount * price
-        pass
-    
+        return self.amount * self.price
+        
     def get_remaining_value(self):
         """
-        Get the remaining value to be filled
-        
-        Similar to get_total_value, but only for the unfilled portion.
-        Used to calculate potential partial fills.
+        Get the remaining value to be filled.
         
         Returns:
             float: Remaining value
         """
-        # Implementation would calculate get_remaining_amount() * price
-        pass
-    
+        return self.get_remaining_amount() * self.price
+        
     def is_expired(self):
         """
-        Check if this order is expired
-        
-        Orders can have optional time limits. This method checks
-        if the current time has passed the expiration time.
+        Check if this order is expired.
         
         Returns:
             bool: True if expired
         """
-        # Implementation would check if current time exceeds expiration_time
-        pass
-    
+        if self.expiration_time == 0:
+            return False
+        return datetime.now().timestamp() * 1000 > self.expiration_time
+        
     def estimate_gas_cost(self):
         """
-        Calculate estimated gas costs for this order
-        
-        Since this is a cross-chain system, we need to calculate gas costs
-        on both blockchains involved in the trade.
+        Calculate estimated gas costs for this order.
         
         Returns:
             dict: Gas fees for base and quote blockchains
         """
-        # Implementation would get gas fees from both blockchains
-        # and return dictionary with both costs
-        pass
+        base_fee = self.base_blockchain.estimate_gas_fee("FILL_ORDER")
+        quote_fee = self.quote_blockchain.estimate_gas_fee("FILL_ORDER")
+        
+        return {"base_fee": base_fee, "quote_fee": quote_fee}

@@ -2,7 +2,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 from web3 import Web3
-from swap import swap_on_uniswap, swap_on_curve
+from swap import swap_on_uniswap, swap_on_curve, approve_token
 from eth_account import Account
 
 load_dotenv()
@@ -29,7 +29,11 @@ USDT_ARBITRUM = "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
 
 async def run_uniswap_swap():
     try:
-        amount_in = Web3.to_wei(5, 'mwei')  # USDC has 6 decimals
+        amount_in = Web3.to_wei(5, 'mwei')
+        print("Approving Uniswap router to spend USDC...")
+        approve_tx = approve_token(arbitrum, acct, USDC_ARBITRUM, UNISWAP_ROUTER, amount_in)
+        print(f"Approval TX: {approve_tx}")
+        
         tx = swap_on_uniswap(arbitrum, acct, UNISWAP_ROUTER, USDC_ARBITRUM, USDT_ARBITRUM, amount_in)
         print(f"Uniswap Swap TX: {tx}")
         return tx
@@ -40,6 +44,10 @@ async def run_uniswap_swap():
 async def run_curve_swap():
     try:
         amount_in = Web3.to_wei(5, 'mwei')
+        print("Approving Curve pool to spend USDT...")
+        approve_tx = approve_token(optimism, acct, USDT_ARBITRUM, CURVE_POOL, amount_in)
+        print(f"Approval TX: {approve_tx}")
+
         tx = swap_on_curve(optimism, acct, CURVE_POOL, amount_in)
         print(f"Curve Swap TX: {tx}")
         return tx

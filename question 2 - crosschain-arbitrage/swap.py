@@ -3,6 +3,22 @@ import json
 def load_abi(file_path):
     with open(file_path, "r") as file:
         return json.load(file)
+    
+def approve_token(web3, account, token_address, spender_address, amount):
+    abi = load_abi("abis/erc20_abi.json")
+    token_contract = web3.eth.contract(address=token_address, abi=abi)
+
+    txn = token_contract.functions.approve(spender_address, amount).build_transaction({
+        'from': account.address,
+        'nonce': web3.eth.get_transaction_count(account.address),
+        'gas': 100000,
+        'gasPrice': web3.to_wei('2', 'gwei')
+    })
+
+    signed_txn = web3.eth.account.sign_transaction(txn, account.key)
+    tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+    return tx_hash.hex()
+
 
 def swap_on_uniswap(web3, account, router_address, token_in, token_out, amount_in):
     abi = load_abi("abis/uniswap_router_abi.json")
@@ -31,7 +47,7 @@ def swap_on_uniswap(web3, account, router_address, token_in, token_out, amount_i
     })
 
     signed_txn = web3.eth.account.sign_transaction(txn, account.key)
-    tx_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+    tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
     return tx_hash.hex()
 
 def swap_on_curve(web3, account, pool_address, amount_in):
@@ -49,5 +65,5 @@ def swap_on_curve(web3, account, pool_address, amount_in):
     })
 
     signed_txn = web3.eth.account.sign_transaction(txn, account.key)
-    tx_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+    tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
     return tx_hash.hex()

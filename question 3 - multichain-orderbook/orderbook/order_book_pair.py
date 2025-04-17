@@ -1,20 +1,13 @@
+from models.order import OrderType, OrderStatus
 
 class OrderBookPair:
     """
-    OrderBookPair Class Design
-    
-    Represents a specific trading pair in the multichain orderbook system.
-    Each pair consists of two assets (base and quote) on two blockchains,
-    and maintains separate order books for buy and sell orders.
+    Represents the order book for a specific trading pair.
     """
     
     def __init__(self, base_asset, quote_asset, base_blockchain, quote_blockchain):
         """
-        Creates a new order book for a specific trading pair
-        
-        A trading pair in the multichain context specifies not just the assets
-        being traded, but also which blockchains they exist on. For example,
-        ETH on Ethereum being traded for MATIC on Polygon.
+        Creates a new order book for a specific trading pair.
         
         Args:
             base_asset (Asset): Base asset in the trading pair
@@ -22,40 +15,45 @@ class OrderBookPair:
             base_blockchain (Blockchain): Blockchain for the base asset
             quote_blockchain (Blockchain): Blockchain for the quote asset
         """
-        # Implementation would:
-        # - Validate that assets/blockchains aren't identical
-        # - Store asset and blockchain references
-        # - Initialize empty buy and sell order arrays
-        pass
-    
+        # Validate that we're not trying to trade the same asset on the same blockchain
+        if (base_asset.id == quote_asset.id and 
+            base_blockchain.id == quote_blockchain.id):
+            raise ValueError("Cannot trade the same asset on the same blockchain")
+            
+        self.base_asset = base_asset
+        self.quote_asset = quote_asset
+        self.base_blockchain = base_blockchain
+        self.quote_blockchain = quote_blockchain
+        self.buy_orders = []
+        self.sell_orders = []
+        
     def add_order(self, order):
         """
-        Add an order to the order book
-        
-        Validates that the order matches this trading pair,
-        adds it to the appropriate order book (buy or sell),
-        and sorts orders for efficient matching.
-        
-        Buy orders are sorted by:
-        1. Price (highest first) - buyers want the best price
-        2. Timestamp (oldest first) - first come, first served
-        
-        Sell orders are sorted by:
-        1. Price (lowest first) - sellers want the best price
-        2. Timestamp (oldest first) - first come, first served
+        Add an order to the order book.
         
         Args:
             order (Order): Order to add
         """
-        # Implementation would validate order, add to appropriate list, and sort
-        pass
-    
+        # Validate that the order matches this pair
+        if (order.base_asset.id != self.base_asset.id or
+            order.quote_asset.id != self.quote_asset.id or
+            order.base_blockchain.id != self.base_blockchain.id or
+            order.quote_blockchain.id != self.quote_blockchain.id):
+            raise ValueError("Order does not match this order book pair")
+            
+        # Add to appropriate list and sort
+        if order.order_type == OrderType.BUY:
+            self.buy_orders.append(order)
+            # Sort buy orders by price (highest first) and then by timestamp
+            self.buy_orders.sort(key=lambda x: (-x.price, x.timestamp))
+        else:
+            self.sell_orders.append(order)
+            # Sort sell orders by price (lowest first) and then by timestamp
+            self.sell_orders.sort(key=lambda x: (x.price, x.timestamp))
+            
     def remove_order(self, order_id):
         """
-        Remove an order from the order book
-        
-        Removes an order when it's filled, cancelled, or expired.
-        Searches in both buy and sell order books.
+        Remove an order from the order book.
         
         Args:
             order_id (str): ID of order to remove
@@ -63,35 +61,50 @@ class OrderBookPair:
         Returns:
             bool: True if order was found and removed
         """
-        # Implementation would search for and remove the order
-        pass
-    
+        # Try to remove from buy orders
+        for i, order in enumerate(self.buy_orders):
+            if order.id == order_id:
+                self.buy_orders.pop(i)
+                return True
+                
+        # Try to remove from sell orders
+        for i, order in enumerate(self.sell_orders):
+            if order.id == order_id:
+                self.sell_orders.pop(i)
+                return True
+                
+        return False
+        
     def find_matching_orders(self, taker_order):
         """
-        Find matching orders for a taker order
-        
-        For buy orders: finds sell orders with price ≤ taker price
-        For sell orders: finds buy orders with price ≥ taker price
-        
-        Only returns active, non-expired orders. Results are already
-        sorted in optimal order based on price and time priority.
+        Find matching orders for a taker order.
         
         Args:
             taker_order (Order): Taker order to match
             
         Returns:
-            list: Array of matching orders
+            list: List of matching orders
         """
-        # Implementation would return appropriate matching orders
-        # based on order type, price, status, and expiration
-        pass
-    
+        if taker_order.order_type == OrderType.BUY:
+            # For a buy order, find sell orders with price <= taker price
+            return [
+                order for order in self.sell_orders
+                if (order.status == OrderStatus.ACTIVE and
+                    order.price <= taker_order.price and
+                    not order.is_expired())
+            ]
+        else:
+            # For a sell order, find buy orders with price >= taker price
+            return [
+                order for order in self.buy_orders
+                if (order.status == OrderStatus.ACTIVE and
+                    order.price >= taker_order.price and
+                    not order.is_expired())
+            ]
+            
     def has_enough_liquidity(self, taker_order):
         """
-        Check if there is enough liquidity to fill a taker order
-        
-        Determines if the combined available amount from all matching
-        orders is sufficient to completely fill the taker order.
+        Check if there is enough liquidity to fill a taker order.
         
         Args:
             taker_order (Order): Taker order to check
@@ -99,6 +112,7 @@ class OrderBookPair:
         Returns:
             bool: True if enough liquidity is available
         """
-        # Implementation would calculate total available liquidity
-        # and compare with the taker order amount
-        pass
+        matching_orders = self.find_matching_orders(taker_order)
+        total_available = sum(order.get_remaining_amount() for order in matching_orders)
+        
+        return total_available >= taker_order.amount

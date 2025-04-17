@@ -1,61 +1,41 @@
+from datetime import datetime
+from models.order_match import OrderMatch
 
 class MultiChainOrderBook:
     """
-    MultiChainOrderBook Class Design
-    
     Central orderbook system that manages trading pairs across multiple blockchains.
-    Maintains separates order books for each unique asset pair and blockchain combination.
     """
     
     def __init__(self):
         """
-        Creates a new multichain order book system
-        
-        Initializes empty collections to track:
-        - Order books for specific trading pairs
-        - Supported blockchains
-        - Supported assets
+        Creates a new multichain order book system.
         """
-        # Implementation would initialize dictionaries to store
-        # order books, blockchains, and assets
-        pass
-    
+        self.order_books = {}  # Maps trading pair keys to OrderBookPair objects
+        self.supported_blockchains = {}  # Maps blockchain IDs to Blockchain objects
+        self.supported_assets = {}  # Maps asset IDs to Asset objects
+        
     def add_blockchain(self, blockchain):
         """
-        Add a supported blockchain
-        
-        Registers a blockchain as supported by the system.
-        Orders can only be placed for assets on supported blockchains.
+        Add a supported blockchain.
         
         Args:
             blockchain (Blockchain): Blockchain to add
         """
-        # Implementation would add the blockchain to supported list
-        pass
-    
+        self.supported_blockchains[blockchain.id] = blockchain
+        
     def add_asset(self, asset):
         """
-        Add a supported asset
-        
-        Registers an asset as supported by the system.
-        Orders can only be placed for supported assets.
+        Add a supported asset.
         
         Args:
             asset (Asset): Asset to add
         """
-        # Implementation would add the asset to supported list
-        pass
-    
+        self.supported_assets[asset.id] = asset
+        
     def get_or_create_order_book(self, base_asset_id, quote_asset_id, 
-                               base_blockchain_id, quote_blockchain_id):
+                                base_blockchain_id, quote_blockchain_id):
         """
-        Create an order book for a trading pair if it doesn't exist
-        
-        This method either retrieves an existing order book for a specific
-        trading pair or creates a new one if it doesn't exist yet.
-        
-        The method ensures that all components (assets, blockchains) are valid
-        and supported by the system before creating an order book.
+        Create an order book for a trading pair if it doesn't exist.
         
         Args:
             base_asset_id (str): ID of base asset
@@ -66,22 +46,37 @@ class MultiChainOrderBook:
         Returns:
             OrderBookPair: Order book for this trading pair
         """
-        # Implementation would validate components, generate a unique key,
-        # check if order book exists, create if needed, and return it
-        pass
-    
+        # Get assets and blockchains
+        base_asset = self.supported_assets.get(base_asset_id)
+        quote_asset = self.supported_assets.get(quote_asset_id)
+        base_blockchain = self.supported_blockchains.get(base_blockchain_id)
+        quote_blockchain = self.supported_blockchains.get(quote_blockchain_id)
+        
+        if not all([base_asset, quote_asset, base_blockchain, quote_blockchain]):
+            raise ValueError("Invalid asset or blockchain")
+            
+        # Create a unique key for this trading pair
+        key = f"{base_asset_id}_{quote_asset_id}_{base_blockchain_id}_{quote_blockchain_id}"
+        
+        # Check if we already have this order book
+        if key not in self.order_books:
+            # Import here to avoid circular import
+            from orderbook.order_book_pair import OrderBookPair
+            
+            # Create a new order book pair
+            order_book = OrderBookPair(
+                base_asset,
+                quote_asset,
+                base_blockchain,
+                quote_blockchain
+            )
+            self.order_books[key] = order_book
+            
+        return self.order_books[key]
+        
     def process_taker_order(self, taker_order):
         """
-        Process a taker order and try to find matching maker orders
-        
-        Core matching engine function that:
-        1. Creates a new OrderMatch object
-        2. Finds the appropriate order book for the trading pair
-        3. Identifies matching maker orders based on price
-        4. Allocates fills from maker orders to the taker order
-        5. Returns the completed match information
-        
-        The result is used by the CrossChainManager to execute the trade.
+        Process a taker order and try to find matching maker orders.
         
         Args:
             taker_order (Order): Taker order to process
@@ -89,5 +84,31 @@ class MultiChainOrderBook:
         Returns:
             OrderMatch: Match object with matching maker orders
         """
-        # Implementation would find matching orders and create match object
-        pass
+        # Create a unique ID for this match
+        match_id = f"match_{int(datetime.now().timestamp() * 1000)}_{taker_order.id}"
+        match = OrderMatch(match_id, taker_order)
+        
+        # Get the appropriate order book
+        order_book_key = (f"{taker_order.base_asset.id}_{taker_order.quote_asset.id}_"
+                         f"{taker_order.base_blockchain.id}_{taker_order.quote_blockchain.id}")
+        order_book = self.order_books.get(order_book_key)
+        
+        if not order_book:
+            # No order book exists for this pair, so there are no matches
+            return match
+            
+        # Find matching orders
+        matching_orders = order_book.find_matching_orders(taker_order)
+        remaining_amount = taker_order.amount
+        
+        # Fill orders until the taker order is completely filled or we run out of matches
+        for maker_order in matching_orders:
+            if remaining_amount <= 0:
+                break
+                
+            fill_amount = min(remaining_amount, maker_order.get_remaining_amount())
+            match.add_maker_order(maker_order, fill_amount)
+            
+            remaining_amount -= fill_amount
+            
+        return match
